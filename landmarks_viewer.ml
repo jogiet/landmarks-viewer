@@ -55,9 +55,30 @@ module Helper = struct
         Element.set_onclick tabs.(k) (fun () -> activate k);
       done
 
+  (** [sortable_table cols row inside] create a table
+
+    @param cols is a list of detailing the columns of table
+      An element is a triple [(header, cmp, proj)] where:
+      + [header] is an HTML element
+      + [cmp] is a compare function see {compare}
+      + [proj] is a projection computing for each row (see below) the
+        corresponding element of the column.
+
+    @param row is a list of element
+
+    @param inside is an HTMl element where the table should be inserted.
+      All previous content is removed. *)
   let rec sortable_table cols rows inside =
     let open Document in
+    (* we clean the inside *)
     removeAll inside;
+    (* We create a table:
+     * <table>
+     *    <thead>
+     *      <tr></tr>
+     *    </thead>
+     *    <tbody></tbody>
+     * </table>  *)
     let table = create_html_table document in
     Node.append_child inside table;
     let thead = create_html_thead document in
@@ -66,8 +87,14 @@ module Helper = struct
     Node.append_child table tbody;
     let first_row = create_html_tr document in
     Node.append_child thead first_row;
+
+    (* Creating the header *)
     List.iter (fun (header, cmp, _) ->
         let th = create_html_th document in
+        (* Computing the closure for onclick evenement.
+         * We recompute the table after sorting the rows.
+         * If we click again on the header <th>, the order is reversed,
+         * hence the new [fun x y -> cmp y x] *)
         Element.set_onclick th (fun () ->
             let rows = List.sort cmp rows in
             let cols =
@@ -90,6 +117,9 @@ module Helper = struct
           ) cols
       ) rows
 
+  (** [format_number s] returns a copy of string [s] with a space inserted
+      every three elements.
+      So [format_number "12345678"] returns ["12 345 678"] *)
   let format_number s =
     let n = String.length s in
     let b = Buffer.create (n + n / 3) in
@@ -101,6 +131,14 @@ module Helper = struct
     done;
     Buffer.contents b
 
+  (** [create ~text ~class_name ~style name] returns an HTML element
+
+    {[
+      <name style="~style" class="~class_name">
+        ~text
+      </name>
+    ]}
+  *)
   let create ?text ?class_name ?style name =
     let element = Document.create_element document name in
     (match text with
@@ -114,6 +152,16 @@ module Helper = struct
      | _ -> ());
     element
 
+  (** [record_table l] returns a table element
+      {[
+        <table class="vertical">
+          <tr><th>n_0</th><td>v_0</td></tr>
+          ...
+          <tr><th>n_i</th><td>v_i</td></tr>
+        </table>
+      ]}
+
+      Where [l] is a list of tuple of name/values [n_i, v_i] *)
   let record_table l =
     let table = create ~class_name:"vertical" "table" in
     List.iter (fun (name, value) ->
@@ -177,6 +225,8 @@ module Graph = struct
   let has_allocated_bytes {nodes; _} =
     Array.exists (fun {allocated_bytes; _} -> allocated_bytes <> 0.0) nodes
 
+  (** [agregated_table graph element] print the table corresponding to the
+      aggregated value in [graph] in [element]. *)
   let aggregated_table graph =
     let graph = Landmark.Graph.aggregate_landmarks graph in
     let all_nodes =
