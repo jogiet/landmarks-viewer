@@ -305,6 +305,7 @@ module TreeView = struct
       let span = create "span" ~text:open_button ~class_name:"collapseButton" in
       Element.set_class_name div "collapsible";
       Node.append_child div span;
+      (* This list stores the list of the child of [x] when it is expanded. *)
       let expanded_state = ref [] in
       let ul = create "ul" in
       Node.append_child li ul;
