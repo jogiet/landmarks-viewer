@@ -225,6 +225,90 @@ module Graph = struct
   let has_allocated_bytes {nodes; _} =
     Array.exists (fun {allocated_bytes; _} -> allocated_bytes <> 0.0) nodes
 
+  module IntMap = Map.Make(Int)
+  module IntSet = Set.Make(Int)
+
+  let set_fpr fmt set =
+    IntSet.iter (Format.fprintf fmt "%i ") set
+
+  module StringSet = Set.Make(String)
+  module StringMap = Map.Make(String)
+
+  let name_2_ids (graph: graph) name =
+    Array.fold_left
+      (fun acc node -> if node.name = name then IntSet.add node.id acc else acc)
+      IntSet.empty
+      graph.nodes
+
+  (** [group_by_name graph ids] group index accoring to their [name] field in
+      [graph].*)
+  let group_by_name graph (ids: IntSet.t) =
+    IntSet.fold
+      (fun id acc -> let name = graph.nodes.(id).name in
+        match StringMap.find_opt name acc with
+        | None -> StringMap.add name (IntSet.singleton id) acc
+        | Some s -> StringMap.add name (IntSet.add id s) acc)
+      ids
+      StringMap.empty
+
+  let merge_nodes (graph: graph) ids id children: node =
+    let elem = IntSet.choose ids in
+    let name = graph.nodes.(elem).name in
+    let location = graph.nodes.(elem).location in
+    let kind = graph.nodes.(elem).kind in
+    let landmark_id = graph.nodes.(elem).landmark_id in
+    let distrib = graph.nodes.(elem).distrib in
+    let calls = IntSet.fold
+      (fun id -> (+) graph.nodes.(id).calls)
+      ids 0 in
+    let time = IntSet.fold
+      (fun id -> (+.) graph.nodes.(id).time)
+      ids 0. in
+    let sys_time = IntSet.fold
+      (fun id -> (+.) graph.nodes.(id).sys_time)
+      ids 0. in
+    let allocated_bytes = IntSet.fold
+      (fun id -> (+.) graph.nodes.(id).allocated_bytes)
+      ids 0. in
+    {children; id; kind; landmark_id; name; location; calls; time; sys_time; allocated_bytes; distrib}
+
+  (** [merge_graph graph name] returned a merged verion of [graph] where all
+      nodes with name [name] form the root of the new graph. *)
+  let merge_graph (graph: graph): string -> graph =
+    fun name ->
+      if name = "ROOT" then graph else
+      let get_uid: unit -> int =
+        let i = ref 0 in
+        fun () -> let r = !i in incr i; r in
+      let rec treat_node ids acc =
+        let id = get_uid () in
+        let children = IntSet.fold
+          (fun id acc ->
+            let ch = graph.nodes.(id).children in
+            List.fold_left (fun acc id -> IntSet.add id acc) acc ch)
+          ids IntSet.empty in
+        let children = group_by_name graph children in
+        let (acc, children) = StringMap.fold
+            (fun _ ids (acc, children) ->
+              let id, acc = treat_node ids acc in
+              acc, id::children)
+            children (acc, []) in
+        let node = merge_nodes graph ids id children in
+        let acc = IntMap.add id node acc in
+        id, acc in
+      let ids = name_2_ids graph name in
+      let root, map = treat_node ids IntMap.empty in
+      let nodes = Array.init (IntMap.cardinal map) (fun i -> IntMap.find i map) in
+      {nodes; root; label=""}
+
+  (** [get_all_name graph] returns a set containing all [name] field values of
+      nodes in [graph]. *)
+  let get_all_name graph: StringSet.t =
+    Array.fold_left
+      (fun acc n -> StringSet.add n.name acc)
+      StringSet.empty
+      graph.nodes
+
   (** [agregated_table graph element] print the table corresponding to the
       aggregated value in [graph] in [element]. *)
   let aggregated_table graph =
@@ -421,6 +505,42 @@ module TreeView = struct
 
 end
 
+module CallerView = struct
+
+  let selector graph tab create proj element =
+    let inv = create graph in
+    let names = Graph.get_all_name graph in
+    let input_name = "fun_input"^tab in
+    let list_name = "all_funs"^tab in
+    let input = Helper.create "input" in
+    let _ = Element.set_attribute input "list" list_name in
+    let _ = Element.set_attribute input "id" input_name in
+    let inlist = Helper.create "datalist" in
+    let _ = Element.set_attribute inlist "id" list_name in
+    let _ = Graph.StringSet.iter
+      (fun name ->
+        let option = Helper.create ~text:name "option" in
+        let _ = Element.set_attribute option "value" name in
+        Node.append_child inlist option)
+      names in
+    let button = Helper.create ~text:"GO" "button" in
+    let div = Helper.create "div" in
+    let onclick () =
+      let funname = Helper.input_of_id input_name in
+      let fn = Html.Input.value funname in
+      let g = inv fn in
+      let _ = Helper.removeAll div in
+      TreeView.callgraph div g proj in
+    begin
+      Element.set_onclick button onclick;
+      Node.append_child element input;
+      Node.append_child element inlist;
+      Node.append_child element button;
+      Node.append_child element div;
+      TreeView.callgraph div (inv "ROOT") proj;
+    end
+end
+
 let filename_onclick _ =
   print_endline "click";
   let filename = Helper.input_of_id "filename" in
@@ -451,16 +571,22 @@ let filename_onclick _ =
             fill div;
             [title, div]
         in
-        let fill_graph proj div =
-          TreeView.callgraph div graph proj;
+        let fill_graph tab proj =
+          CallerView.selector graph tab merge_graph proj;
         in
-        let l = List.flatten (List.map tab [
-            true, "Source Tree Cycles", fill_graph (fun {time; _} -> time);
+        let tabs = [
+          (* cycle tab *)
+          true, "Source Tree Cycles", fill_graph "cycle" (fun {time; _} -> time);
+          (* time tab *)
             has_sys_time graph, "Source Tree Time",
-            fill_graph (fun {sys_time; _} -> sys_time);
+          fill_graph "time" (fun {sys_time; _} -> sys_time);
+          (* Gc tab *)
             has_allocated_bytes graph, "Source Tree Allocation",
-            fill_graph (fun {allocated_bytes; _} -> allocated_bytes);
-            true, "Aggregated Table", Graph.aggregated_table graph ])
+          fill_graph "bytes "(fun {allocated_bytes; _} -> allocated_bytes);
+          (* Aggregated table *)
+          true, "Aggregated Table", Graph.aggregated_table graph;
+        ] in
+        let l = List.flatten (List.map tab tabs)
         in
         Helper.tabs_logic l
     in

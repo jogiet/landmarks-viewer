@@ -254,6 +254,7 @@ module Html = struct
     type t = Kinds.Html.input Element.t [@@js]
     include ([%js :
                val files: t -> FileList.t [@@js.get]
+               val value: t-> string [@@js.get]
              ])
   end
 
