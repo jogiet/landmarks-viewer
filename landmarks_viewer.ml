@@ -268,6 +268,32 @@ module TreeView = struct
   let open_button = "[+]"
   let close_button = "[-]"
 
+  (** [generate render expand children inside parent x] adds a list item [<li>]
+      in [inside]
+
+      @param render is a closure to render the [x] node.
+
+      @param expand
+
+      @param children is a continuation computing the sons of each element of
+        the graph
+
+      @param inside is an HTML element where the node should be inserted
+
+      @param x is the node that should be generated
+
+      @return the [<li>] node.
+
+      {[
+        <li>
+          <div class="collapsible">
+            <span>  /* Generated only if children x <> [] */
+            </span>
+          </div>
+        </li>
+      ]}
+
+  *)
   let rec generate render expand children inside parent x =
     let li = create "li" in
     let div = create "div" in
