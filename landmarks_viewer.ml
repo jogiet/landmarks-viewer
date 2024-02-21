@@ -347,11 +347,11 @@ module TreeView = struct
       | Normal -> begin
           let i = intensity node in
           (* Implements the bijection:
-                 [0, 1] --> [0,1]
-                              ______________
-                   i   |--> \/ 1 - (i - 1)^2
-
-             to "amplify" the intensity (it is a quarter of a circle).
+           *  [0, 1] --> [0,1]
+           *               ______________
+           *    i   |--> \/ 1 - (i - 1)^2
+           *
+           *  to "amplify" the intensity (it is a quarter of a circle).
           *)
           let i = i -. 1.0 in
           let i = i *. i in
