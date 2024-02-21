@@ -322,27 +322,106 @@ module Graph = struct
     let profile_with_sys_time =
       if has_sys_time graph then
         [text "Time", (fun x y -> compare x.sys_time y.sys_time),
-         fun {sys_time; _} -> text (Printf.sprintf "%.0f" sys_time |> Helper.format_number)]
+          fun {sys_time; _} -> text (Printf.sprintf "%.0f" sys_time |> Helper.format_number)]
       else []
     in
     let profile_with_allocated_bytes =
       if has_allocated_bytes graph then
         [text "Allocated Bytes", (fun x y -> compare x.allocated_bytes y.allocated_bytes),
-         fun {allocated_bytes; _} -> text (Printf.sprintf "%.0f" allocated_bytes |> Helper.format_number)]
+          fun {allocated_bytes; _} -> text (Printf.sprintf "%.0f" allocated_bytes |> Helper.format_number)]
       else []
     in
     let cols = [
       (text "Name", (fun x y -> compare x.name y.name),
-       fun {name; _} -> text name);
+        fun {name; _} -> text name);
       (text "Location", (fun x y -> compare x.location y.location),
-       fun {location; _} -> text location);
+        fun {location; _} -> text location);
       (text "Calls", (fun x y -> compare x.calls y.calls),
-       fun {calls; _} -> text (string_of_int calls |> Helper.format_number));
+        fun {calls; _} -> text (string_of_int calls |> Helper.format_number));
       (text "Cycles", (fun x y -> compare x.time y.time),
-       fun {time; _} -> text (Printf.sprintf "%.0f" time |> Helper.format_number));
+        fun {time; _} -> text (Printf.sprintf "%.0f" time |> Helper.format_number));
     ] @ profile_with_sys_time @ profile_with_allocated_bytes
     in
     Helper.sortable_table cols all_nodes
+
+  (** [get_calls grap srcs dsts] returns the number of *)
+  let get_calls graph srcs dsts =
+    let treat_src src acc =
+      let children = graph.nodes.(src).children in
+        List.fold_left
+          (fun acc child -> if IntSet.mem child dsts
+            then acc + graph.nodes.(child).calls
+            else acc)
+          acc
+          children in
+    IntSet.fold treat_src srcs 0
+
+  (** [inverse_graph graph name] returned an inversed graph where all *)
+  let inverse_graph graph : string -> graph =
+    let parents: IntSet.t IntMap.t Lazy.t =
+      let treat_node acc node =
+        List.fold_left
+          (fun (acc: IntSet.t IntMap.t) (child: int) ->
+            match IntMap.find_opt child acc with
+            | None -> IntMap.add child (IntSet.singleton node.id) acc
+            | Some parents -> IntMap.add child (IntSet.add node.id parents) acc)
+          acc node.children in
+      Lazy.from_fun (fun () -> Array.fold_left treat_node IntMap.empty graph.nodes) in
+    fun name ->
+      let get_uid =
+        let i = ref 0 in
+        fun () -> let res = !i in incr i; res in
+      let parents = Lazy.force parents in
+      let get_parent id =
+        IntMap.find_opt id parents
+        |> Option.value ~default:IntSet.empty in
+      let rec treat_ids name t ids calls acc: node IntMap.t * id  =
+        let location = graph.nodes.(IntSet.min_elt ids).location in
+        let id = get_uid () in
+        let time = t in
+        let sys_time =
+          IntSet.fold (fun id -> (+.) graph.nodes.(id).sys_time) ids 0.0 in
+        let allocated_bytes =
+          IntSet.fold (fun id -> (+.) graph.nodes.(id).allocated_bytes) ids 0.0 in
+        let distrib = Float.Array.create 0 in
+        let kind = Normal in
+        let landmark_id = name in
+        let parents = IntSet.fold
+          (fun id -> id |> get_parent |> IntSet.union)
+          ids IntSet.empty in
+        let parents = group_by_name graph parents in
+        let loc_calls =
+          IntSet.fold (fun id -> (+) graph.nodes.(id).calls) ids 0
+          |> float_of_int in
+        let acc, children = StringMap.fold
+          (fun name srcs (acc, children) ->
+            let calls = get_calls graph srcs ids in
+            let t = t *. (float_of_int calls) /. loc_calls in
+            let acc, child = treat_ids name t srcs calls acc in
+            acc, child::children)
+          parents (acc, []) in
+        let node: node = {
+          name;
+          id;
+          time;
+          sys_time;
+          allocated_bytes;
+          distrib;
+          location;
+          calls;
+          children;
+          kind;
+          landmark_id} in
+        let acc = IntMap.add id node acc in
+        acc, id in
+      let srcs =
+        Array.fold_left
+          (fun acc node -> if node.name = name then IntSet.add node.id acc else acc)
+          IntSet.empty graph.nodes in
+      let calls = IntSet.fold  (fun id -> (+) graph.nodes.(id).calls) srcs 0  in
+      let map, root = treat_ids name 1000.0 srcs calls IntMap.empty in
+      let nodes = Array.init (IntMap.cardinal map) (fun i -> IntMap.find i map) in
+      {nodes; root; label = name }
 
 end
 
@@ -437,7 +516,7 @@ module TreeView = struct
            *    i   |--> \/ 1 - (i - 1)^2
            *
            *  to "amplify" the intensity (it is a quarter of a circle).
-          *)
+           *)
           let i = i -. 1.0 in
           let i = i *. i in
           let i = sqrt (1.0 -. i) in
@@ -578,13 +657,16 @@ let filename_onclick _ =
           (* cycle tab *)
           true, "Source Tree Cycles", fill_graph "cycle" (fun {time; _} -> time);
           (* time tab *)
-            has_sys_time graph, "Source Tree Time",
+          has_sys_time graph, "Source Tree Time",
           fill_graph "time" (fun {sys_time; _} -> sys_time);
           (* Gc tab *)
-            has_allocated_bytes graph, "Source Tree Allocation",
+          has_allocated_bytes graph, "Source Tree Allocation",
           fill_graph "bytes "(fun {allocated_bytes; _} -> allocated_bytes);
           (* Aggregated table *)
           true, "Aggregated Table", Graph.aggregated_table graph;
+          (* caller graph *)
+          true, "Caller graph",
+          CallerView.selector graph "caller" inverse_graph (fun {time; _} -> time);
         ] in
         let l = List.flatten (List.map tab tabs)
         in
