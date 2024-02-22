@@ -21,7 +21,7 @@ jobs:
         with:
           ocaml-compiler: ${{ matrix.ocaml-compiler }}
       
-      - run: opam install dune js_of_ocaml gen_js_api
+      - run: opam install dune js_of_ocaml landmarks gen_js_api
 
       - run: opam exec -- dune build
       
