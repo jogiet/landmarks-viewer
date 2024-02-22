@@ -604,6 +604,7 @@ module CallerView = struct
       names in
     let button = Helper.create ~text:"GO" "button" in
     let div = Helper.create "div" in
+    let _ = Element.set_attribute div "class" "tree" in
     let onclick () =
       let funname = Helper.input_of_id input_name in
       let fn = Html.Input.value funname in
