@@ -9,8 +9,8 @@ library.
 Installation
 ------------
 
-0. `opam install --deps-only .`
-1. dune build
+0. `opam install --deps-only -y .`
+1. `dune build`
 2. Open the web app located in `landmarks_viewer.html` in browser.
 2. Or deploy the following to files on a web server:
 ```
