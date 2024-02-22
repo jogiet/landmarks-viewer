@@ -15,5 +15,5 @@
  (name landmarks-viewer)
  (synopsis "A simple profiling library")
  (description "A web viewer for browsing .json file produced by the landmarks runtime.")
- (depends (ocaml (>= 4.08)))
+ (depends (ocaml (>= 4.08)) js_of_ocaml landmarks gen_js_api)
 )

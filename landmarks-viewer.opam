@@ -12,6 +12,9 @@ bug-reports: "https://github.com/LexiFi/landmarks-viewer/issues"
 depends: [
   "dune" {>= "2.7"}
   "ocaml" {>= "4.08"}
+  "js_of_ocaml"
+  "landmarks"
+  "gen_js_api"
   "odoc" {with-doc}
 ]
 build: [
