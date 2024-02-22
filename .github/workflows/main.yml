@@ -4,16 +4,29 @@ on: push
 
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os:
+          - "ubuntu-latest"
+        ocaml_compiler:
+          - "4.14"
+    runs-on: ${{ matrix.os }}
+    
     steps:
       -
         name: Checkout
         uses: actions/checkout@v4
+      
+      - run: opam install dune js_of_ocaml gen_js_api
+
+      - run: opam exec -- dune build
+      
       -
         name: Gen dummy page
         run: |
           mkdir public
           cp landmarks_viewer.html public/index.html
+          cp landmarks_viewer.js public/landmarks_viewer.js
       -
         name: Deploy to GitHub Pages
         uses: crazy-max/ghaction-github-pages@v4
