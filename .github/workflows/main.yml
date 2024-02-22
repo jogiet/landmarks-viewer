@@ -1,0 +1,46 @@
+name: page
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  publish:
+    strategy:
+      matrix:
+        os:
+          - "ubuntu-latest"
+        ocaml-compiler:
+          - "4.14"
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set-up OCaml
+        uses: ocaml/setup-ocaml@v2
+        with:
+          ocaml-compiler: ${{ matrix.ocaml-compiler }}
+
+      - name: install dependancies
+        run: opam install dune js_of_ocaml landmarks gen_js_api
+
+      - name: Build
+        run: opam exec -- dune build
+
+      -
+        name: Copy pages
+        run: |
+          mkdir public
+          cp landmarks_viewer.html public/index.html
+          cp landmarks_viewer.js public/landmarks_viewer.js
+      -
+        name: Deploy to GitHub Pages
+        uses: crazy-max/ghaction-github-pages@v4
+        with:
+          target_branch: gh-pages
+          build_dir: public
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
