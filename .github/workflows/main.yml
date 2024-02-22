@@ -13,9 +13,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     
     steps:
-      -
-        name: Checkout
+      - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set-up OCaml
+        uses: ocaml/setup-ocaml@v2
+        with:
+          ocaml-compiler: ${{ matrix.ocaml-compiler }}
       
       - run: opam install dune js_of_ocaml gen_js_api
 
