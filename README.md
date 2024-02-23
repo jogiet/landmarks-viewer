@@ -6,6 +6,8 @@ library for OCaml. The *landmarks-viewer* is a simple web-application that
 allows to browser the result of a profiling session using the *landmarks*
 library.
 
+You can try it [online](https://jogiet.github.io/landmarks-viewer)
+
 Installation
 ------------
 
