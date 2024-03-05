@@ -231,8 +231,34 @@ module Graph = struct
   let set_fpr fmt set =
     IntSet.iter (Format.fprintf fmt "%i ") set
 
+  module Tuple
+      (M1: Set.OrderedType)
+      (M2: Set.OrderedType)
+      : Set.OrderedType with type t = M1.t * M2.t =
+  struct
+    type t = M1.t * M2.t
+    let compare (x1, x2) (y1, y2) =
+      let res1 = M1.compare x1 y1 in
+      if res1 = 0 then M2.compare x2 y2 else res1
+  end
+
+  module SString: (Set.OrderedType with type t = string * string) =
+    Tuple(String)(String)
+
   module StringSet = Set.Make(String)
+  module SStringSet = Set.Make(SString)
   module StringMap = Map.Make(String)
+  module SStringMap = Map.Make(SString)
+
+  (** [get_loc_metric graph get id] returns
+      [get(id) - Σ_{child in children(id)} get(child)]*)
+  let get_local_metric (graph: graph) (get: node -> float) (id: id): float =
+    let node = graph.nodes.(id) in
+    let time = get node in
+    List.fold_left
+      (fun acc id' -> acc -. get graph.nodes.(id'))
+      time
+      node.children
 
   let name_2_ids (graph: graph) name =
     Array.fold_left
@@ -309,10 +335,26 @@ module Graph = struct
       StringSet.empty
       graph.nodes
 
+  (** [get_loc_aggregated graph aggreg_graph get] returns a *)
+  let get_loc_aggregated (graph0: graph) (graph: graph) (get: node -> float) : float Array.t =
+    let map = Array.fold_left
+      (fun acc node ->
+        let key = node.name, node.location in
+        let t_acc = SStringMap.find_opt key acc |> Option.value ~default:0.0 in
+        let t = get_local_metric graph0 get node.id in
+        SStringMap.add key (t +. t_acc) acc)
+      SStringMap.empty
+      graph0.nodes in
+    Array.init
+      (Array.length graph.nodes)
+      (fun id -> let node = graph.nodes.(id) in
+        SStringMap.find (node.name, node.location) map)
+
   (** [agregated_table graph element] print the table corresponding to the
       aggregated value in [graph] in [element]. *)
-  let aggregated_table graph =
-    let graph = Landmark.Graph.aggregate_landmarks graph in
+  let aggregated_table graph0 =
+    let graph = Landmark.Graph.aggregate_landmarks graph0 in
+    let loc_cycles = get_loc_aggregated graph0 graph (fun {time; _} -> time) in
     let all_nodes =
       List.sort
         (fun {time = time1; _} {time = time2; _} -> compare time2 time1)
@@ -321,14 +363,24 @@ module Graph = struct
     let text x = Document.create_text_node document x in
     let profile_with_sys_time =
       if has_sys_time graph then
-        [text "Time", (fun x y -> compare x.sys_time y.sys_time),
-          fun {sys_time; _} -> text (Printf.sprintf "%.0f" sys_time |> Helper.format_number)]
+        let loc_sys_time = get_loc_aggregated graph0 graph (fun {sys_time; _} -> sys_time) in
+        [
+          (text "Tot Time", (fun x y -> compare x.sys_time y.sys_time),
+            fun {sys_time; _} -> text (Printf.sprintf "%.0f" sys_time |> Helper.format_number));
+          (text "Fun Time", (fun x y -> compare loc_sys_time.(x.id) loc_sys_time.(y.id)),
+            fun {id; _} -> text (Printf.sprintf "%.0f" loc_sys_time.(id) |> Helper.format_number));
+        ]
       else []
     in
     let profile_with_allocated_bytes =
       if has_allocated_bytes graph then
-        [text "Allocated Bytes", (fun x y -> compare x.allocated_bytes y.allocated_bytes),
-          fun {allocated_bytes; _} -> text (Printf.sprintf "%.0f" allocated_bytes |> Helper.format_number)]
+        let loc_allocated_bytes = get_loc_aggregated graph0 graph (fun {allocated_bytes; _} -> allocated_bytes) in
+        [
+          (text "Tot Alloc Bytes", (fun x y -> compare x.allocated_bytes y.allocated_bytes),
+            fun {allocated_bytes; _} -> text (Printf.sprintf "%.0f" allocated_bytes |> Helper.format_number));
+          (text "Fun Alloc Bytes", (fun x y -> compare loc_allocated_bytes.(x.id) loc_allocated_bytes.(y.id)),
+            fun {id; _} -> text (Printf.sprintf "%.0f" loc_allocated_bytes.(id) |> Helper.format_number));
+        ]
       else []
     in
     let cols = [
@@ -338,8 +390,10 @@ module Graph = struct
         fun {location; _} -> text location);
       (text "Calls", (fun x y -> compare x.calls y.calls),
         fun {calls; _} -> text (string_of_int calls |> Helper.format_number));
-      (text "Cycles", (fun x y -> compare x.time y.time),
+      (text "Tot Cycles", (fun x y -> compare x.time y.time),
         fun {time; _} -> text (Printf.sprintf "%.0f" time |> Helper.format_number));
+      (text "Fun Cycles", (fun x y -> compare loc_cycles.(x.id) loc_cycles.(y.id)),
+        fun {id; _} -> text (Printf.sprintf "%.0f" loc_cycles.(id) |> Helper.format_number));
     ] @ profile_with_sys_time @ profile_with_allocated_bytes
     in
     Helper.sortable_table cols all_nodes
@@ -527,17 +581,33 @@ module TreeView = struct
       | Sampler -> rgb 0 200 125
     in
     let previous_info = ref None in
-    let render (parent : Graph.node option) container ({Graph.name; time = node_time; kind; calls; distrib; allocated_bytes; sys_time; location; _} as node) =
+    let render (parent : Graph.node option) container ({Graph.name; time = node_time; kind; calls; distrib; allocated_bytes; sys_time; location; id; _} as node) =
+      let loc_time = Graph.get_local_metric graph (fun {time; _} -> time) id in
       let node_value = proj node in
       let span = create "span" ~class_name:"content" ~text:name ~style:(Printf.sprintf "color:%s" (color node)) in
       Element.set_onmouseover span (fun () ->
           (match !previous_info with Some dispose -> dispose () | None -> ());
           let table =
             Helper.record_table
-              ( ["Name", name; "Cycles", Printf.sprintf "%.0f" node_time |> Helper.format_number; "Calls", Printf.sprintf "%d" calls |> Helper.format_number ]
+              ( [ "Name", name;
+                  "Tot Cycles", Printf.sprintf "%.0f" node_time |> Helper.format_number;
+                  "Fun Cycles", Printf.sprintf "%.0f" loc_time |> Helper.format_number;
+                  "Calls", Printf.sprintf "%d" calls |> Helper.format_number ]
                 @ (if location <> "" then ["Location", location] else [])
-                @ (if sys_time <> 0.0 then ["Time", Printf.sprintf "%.0f" sys_time |> Helper.format_number ] else [])
-                @ (if allocated_bytes <> 0.0 then ["Allocated bytes", Printf.sprintf "%.0f" allocated_bytes |> Helper.format_number ] else []))
+                @ (if sys_time <> 0.0 then
+                    let loc_sys_time = Graph.get_local_metric graph (fun {sys_time; _} -> sys_time) id in
+                    [
+                      ("Tot Time", Printf.sprintf "%.0f" sys_time |> Helper.format_number);
+                      ("Fun Time", Printf.sprintf "%.0f" loc_sys_time |> Helper.format_number);
+                    ]
+                  else [])
+                @ (if allocated_bytes <> 0.0 then
+                    let loc_allocated_bytes = Graph.get_local_metric graph (fun {allocated_bytes; _} -> allocated_bytes) id in
+                    [
+                      ("Tot Alloc bytes", Printf.sprintf "%.0f" allocated_bytes |> Helper.format_number);
+                      ("Fun Alloc bytes", Printf.sprintf "%.0f" loc_allocated_bytes |> Helper.format_number);
+                    ]
+                  else []))
           in
           let div = create "div" ~class_name:"fixed" in
           Node.append_child div table;
