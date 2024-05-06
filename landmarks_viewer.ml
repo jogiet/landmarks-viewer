@@ -42,11 +42,13 @@ module Helper = struct
       let size = Array.length contents in
       let activate k =
         Element.set_class_name tabs.(k) "active";
-        show contents.(k);
+        let div, act = contents.(k) in
+        Lazy.force act;
+        show div;
         for i = 0 to size - 1 do
           if i <> k then begin
             Element.set_class_name tabs.(i) "";
-            hide contents.(i);
+            hide @@ fst contents.(i);
           end
         done;
       in
@@ -718,8 +720,8 @@ let filename_onclick _ =
             let title = Helper.create ~text:title "li" in
             Node.append_child tabs title;
             Node.append_child main div;
-            fill div;
-            [title, div]
+            let action = Lazy.from_fun (fun _ -> fill div) in
+            [title, (div, action)]
         in
         let fill_graph tab proj =
           CallerView.selector graph tab merge_graph proj;
