@@ -492,7 +492,7 @@ module Graph = struct
 
 end
 
-module Chart = struct
+module BarChart = struct
   open Graph
 
   let xlmns="http://www.w3.org/2000/svg"
@@ -633,6 +633,221 @@ module Chart = struct
     let _ = Node.append_child elem @@ Helper.create "br" in
     let _ = Node.append_child elem button in
     let _ = print_endline "Chart created" in
+    ()
+
+end
+
+module PieChart = struct
+  open Graph
+
+  let xlmns="http://www.w3.org/2000/svg"
+
+  let max_size = ref 600 (** for a HD screen this is fine *)
+  let update svg =
+    let _width = Window.inner_width GlobalVariables.window in
+    let _height = Window.inner_width GlobalVariables.window in
+    (* let _ = max_size := min (width - 700) (height - 200) in *)
+    let _ = print_endline (Format.asprintf "new_val: %i" !max_size) in
+    let _ = Element.set_attribute_n_s svg "" "width" (Format.asprintf "%i" !max_size) in
+    let _ = Element.set_attribute_n_s svg "" "height" (Format.asprintf "%i" !max_size) in
+    ()
+
+
+  let max_depth = 100
+
+  let lim = 2. *. Float.pi /. 400.
+  let pie_height = 35.
+
+  let radius depth =
+    if true then pie_height *. (float_of_int depth) else
+    let ratio = 0.9 in
+    let rec aux acc r depth =
+      if depth = 0 then acc
+      else aux (acc +. r) (r *. ratio) (depth -1) in
+    aux 0. pie_height depth
+
+  let color graph proj node =
+    let intensity node = proj node /. (proj graph.nodes.(0))  in
+    let rgb = Printf.sprintf "rgb(%d,%d,%d)" in
+    let open Graph in
+    match node.kind with
+    | Normal -> begin
+        let i = intensity node in
+        (* Implements the bijection:
+         *  [0, 1] --> [0,1]
+         *               ______________
+         *    i   |--> \/ 1 - (i - 1)^2
+         *
+         *  to "amplify" the intensity (it is a quarter of a circle).
+         *)
+        let i = i -. 1.0 in
+        let i = i *. i in
+        let i = sqrt (1.0 -. i) |> ( *. ) 255.0 |> int_of_float in
+        rgb (i) 0 0
+      end
+    | Root -> rgb 125 125 125
+    | Counter -> rgb 0 125 200
+    | Sampler -> rgb 0 200 125
+
+  let hover (graph) (node: Graph.node) svg () =
+    let div = Helper.get_fixed_table () in
+    let parent = Node.parent_node svg in
+    let _ = Node.append_child parent div in
+    let _ = Helper.removeAll div in
+    let table =
+      let loc_time = Graph.get_local_metric graph (fun {time; _} -> time) node.id in
+      Helper.record_table
+        ( [ "Name", node.name;
+            "Tot Cycles", Printf.sprintf "%.0f" node.time |> Helper.format_number;
+            "Fun Cycles", Printf.sprintf "%.0f" loc_time |> Helper.format_number;
+            "Calls", Printf.sprintf "%d" node.calls |> Helper.format_number ]
+          @ (if node.location <> "" then ["Location", node.location] else [])
+          @ (if node.sys_time <> 0.0 then
+              let loc_sys_time = Graph.get_local_metric graph (fun {sys_time; _} -> sys_time) node.id in
+              [
+                ("Tot Time", Printf.sprintf "%.0f" node.sys_time |> Helper.format_number);
+                ("Fun Time", Printf.sprintf "%.0f" loc_sys_time |> Helper.format_number);
+              ]
+            else [])
+          @ (if node.allocated_bytes <> 0.0 then
+              let loc_allocated_bytes = Graph.get_local_metric graph (fun {allocated_bytes; _} -> allocated_bytes) node.id in
+              [
+                ("Tot Alloc bytes", Printf.sprintf "%.0f" node.allocated_bytes |> Helper.format_number);
+                ("Fun Alloc bytes", Printf.sprintf "%.0f" loc_allocated_bytes |> Helper.format_number);
+              ]
+            else [])) in
+    Node.append_child div table
+
+  type point = {x: float; y: float}
+  type svg_path_elem =
+    | Move of point
+    | Line of point
+    | Horizontal of float
+    | Vertical of float
+    | Arc of float * float * float * bool * bool * point
+  type svg_path = svg_path_elem list
+
+  let pp_point fmt p = Format.fprintf fmt "%4.2f %4.2f"p.x p.y
+  let pp_elem fmt = function
+    | Move p -> Format.fprintf fmt "M %a" pp_point p
+    | Line p -> Format.fprintf fmt "L %a" pp_point p
+    | Arc (rx, ry, rot_x, l_flag, s_flag, p) ->
+      Format.fprintf fmt "A %.0f %.0f %.0f %i %i %a" rx ry rot_x
+        (if l_flag then 1 else 0)
+        (if s_flag then 1 else 0)
+        pp_point p
+    | Horizontal y -> Format.fprintf fmt "H %.2f" y
+    | Vertical x -> Format.fprintf fmt "V %.2f" x
+  let pp_path fmt (path: svg_path) =
+    let _ = Format.fprintf fmt "@[<v 0>" in
+    let _ = List.iter (Format.fprintf fmt "%a @ " pp_elem) path in
+    let _ = Format.fprintf fmt "@]" in
+    ()
+
+  let trans {x; y} =
+    let off = (!max_size |> float_of_int) /. 2.0 in
+    let x = x +. off in
+    let y = off -. y in
+    { x; y }
+
+  let print_circle f_click f_hover elem color: unit =
+    let r = pie_height -. 2.0
+      |> Format.asprintf "%.2f" in
+    let circle = Document.create_element_n_s document xlmns "circle" in
+    let c = (float_of_int !max_size) /. 2.0 |> Format.asprintf "%.2f" in
+    let _ = Element.set_attribute_n_s circle "" "cx" c in
+    let _ = Element.set_attribute_n_s circle "" "cy" c in
+    let _ = Element.set_attribute_n_s circle "" "r" r in
+    let _ = Element.set_attribute_n_s circle "" "fill" color in
+    let _ = Element.set_attribute_n_s circle "" "class" "bar" in
+    let _ = Element.set_onclick circle f_click in
+    let _ = Element.set_onmouseover circle f_hover in
+    Node.append_child elem circle
+
+  (** [print_pie depth theta phi f_click c_hover elem color]
+      displays a pie part starting at angle [theta] and spanning in angle [phi].
+      [depth] is  *)
+
+  let print_pie depth theta phi f_click f_hover elem color: unit =
+    let r1 = radius depth in
+    let r2 = (radius (depth + 1)) -. 2.0 in
+    let lim = lim *. 25. /. r1 in
+    let ta = theta +. lim in
+    let tb = theta +. phi -. lim in
+    let a1 = {x = r1 *. cos(ta); y = r1 *. sin(ta)} |> trans in
+    let a2 = {x = r2 *. cos(ta); y = r2 *. sin(ta)} |> trans in
+    let b1 = {x = r1 *. cos(tb); y = r1 *. sin(tb)} |> trans in
+    let b2 = {x = r2 *. cos(tb); y = r2 *. sin(tb)} |> trans in
+    let p =
+      [
+        Move b1;
+        Arc (r1, r1, 0., phi > Float.pi, true, a1);
+        Line a2;
+        Arc (r2, r2, 0., phi > Float.pi, false, b2);
+        Line b1;
+      ] in
+    let d = Format.asprintf "%a" pp_path p in
+    let path = Document.create_element_n_s document xlmns "path" in
+    let _ = Element.set_attribute_n_s path "" "d" d in
+    let _ = Element.set_attribute_n_s path "" "fill" color in
+    let _ = Element.set_attribute_n_s path "" "class" "bar" in
+    let _ = Element.set_onclick path f_click in
+    let _ = Element.set_onmouseover path f_hover in
+    Node.append_child elem path
+
+  let cmp (g: Graph.graph)  proj i1 i2 =
+    let v1 = proj g.nodes.(i1) in
+    let v2 = proj g.nodes.(i2) in
+    compare v2 v1
+
+  let rec print_fun (graph: Graph.graph) theta depth root proj fun_id element =
+    let node = graph.nodes.(fun_id) in
+    let local = proj node in
+    let total = proj graph.nodes.(root) in
+    let ratio = local /. total in
+    let phi = ratio *. (2. *. Float.pi) in
+    if phi < lim then theta +. phi else
+    let on_click () =
+      let _ = print_endline "click" in
+      let _ = Helper.removeAll element in
+      let _ = update element in
+      print_fun graph 0.0 0 fun_id proj fun_id element |> ignore in
+    let hover = hover graph node element in
+    let color = color graph proj node in
+    let _ =
+      if depth = 0 then
+        print_circle on_click hover element color
+      else
+      print_pie depth theta phi on_click hover element color  in
+    let r = if depth > max_depth then 0.0 else
+      node.children
+      |> List.sort (cmp graph proj)
+      |> List.fold_left
+      (fun left id -> print_fun graph left (depth+1) root proj id element)
+      theta  in
+    max r (theta +. phi)
+
+
+  let print_svg (g: Graph.graph) proj elem =
+    let _ = print_endline "Starting print_svg" in
+    let div_table = Helper.get_fixed_table () in
+    let _ = Node.append_child elem div_table in
+    let svg = Document.create_element_n_s document xlmns "svg" in
+    let _ = update svg in
+    let _ = Element.set_attribute_n_s svg "" "width" (Format.asprintf "%i" !max_size) in
+    let _ = Element.set_attribute_n_s svg "" "height" (Format.asprintf "%i" !max_size) in
+    let _ = print_fun g 0. 0 0 proj 0 svg |> ignore in
+    let button = Helper.create ~text:"goto root" ~class_name:"inter_button" "button" in
+    let goto_root () =
+      let _ = Helper.removeAll svg in
+      let _ = update svg in
+      print_fun g 0.0 0 0 proj 0 svg |> ignore in
+    let _ = Element.set_onclick button goto_root in
+    let _ = Node.append_child elem div_table in
+    let _ = Node.append_child elem svg in
+    let _ = Node.append_child elem @@ Helper.create "br" in
+    let _ = Node.append_child elem button in
+    let _ = print_endline "PieChart created" in
     ()
 
 end
@@ -850,8 +1065,9 @@ module CallerView = struct
       let tabs_title = Helper.create "ul" ~class_name:"tabs" in
       let _ = Node.append_child div_view tabs_title in
       let tabs: (bool * string * ('a Node.t -> unit)) list = [
+        true, "Pie View", PieChart.print_svg g proj;
         true, "Graph View", (fun div -> Element.set_attribute div "class" "tree"; TreeView.callgraph div g proj);
-        true, "Bar View", Chart.print_svg g proj;
+        true, "Bar View", BarChart.print_svg g proj;
       ] in
       let l = List.map (make_tab tabs_title div_view) tabs in
       let l = List.flatten l in
