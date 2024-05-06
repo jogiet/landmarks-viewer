@@ -675,7 +675,7 @@ module CallerView = struct
         let _ = Element.set_attribute option "value" name in
         Node.append_child inlist option)
       names in
-    let button = Helper.create ~text:"GO" "button" in
+    let button = Helper.create ~text:"GO" ~class_name:"inter_button" "button" in
     let div = Helper.create "div" in
     let _ = Element.set_attribute div "class" "tree" in
     let onclick () =
