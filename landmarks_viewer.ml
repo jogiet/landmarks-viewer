@@ -616,27 +616,27 @@ module TreeView = struct
           Node.append_child div table;
           Node.append_child container div;
           previous_info := Some (fun () -> Node.remove_child container div));
-      (match parent, kind with
-       | Some parent, Graph.Normal ->
-         let parent_value = proj parent in
-         let text =
-           Printf.sprintf " (%2.2f%%) " (100.0 *. node_value /. parent_value)
-         in
-         let span_value = create ~text "span" in
-         Node.append_child span span_value
-       | _, Graph.Counter ->
-         let text =
-           Printf.sprintf " (%d calls) " calls
-         in
-         let span_time = create ~text "span" in
-         Node.append_child span span_time
-       | _, Graph.Sampler ->
-         let text =
-           Printf.sprintf " (%d values) " (Float.Array.length distrib)
-         in
-         let span_time = create ~text "span" in
-         Node.append_child span span_time
-       | _ -> ());
+      ( match parent, kind with
+        | Some parent, Graph.Normal ->
+          let parent_value = proj parent in
+          let text =
+            Printf.sprintf " (%2.2f%%) " (100.0 *. node_value /. parent_value)
+          in
+          let span_value = create ~text "span" in
+          Node.append_child span span_value
+        | _, Graph.Counter ->
+          let text =
+            Printf.sprintf " (%d calls) " calls
+          in
+          let span_time = create ~text "span" in
+          Node.append_child span span_time
+        | _, Graph.Sampler ->
+          let text =
+            Printf.sprintf " (%d values) " (Float.Array.length distrib)
+          in
+          let span_time = create ~text "span" in
+          Node.append_child span span_time
+        | _ -> ());
       span
     in
     let reference = Landmark.Graph.shallow_ancestor graph in
