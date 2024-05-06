@@ -176,6 +176,16 @@ module Helper = struct
       l;
     table
 
+  let get_fixed_table () =
+    let main = element_of_id "main" in
+    match Document.get_element_by_id document "div_table" with
+    | Some div -> Node.append_child main div; div
+    | None ->
+        let div = create "div" ~class_name:"fixed" in
+        let _ = Element.set_attribute div "id" "div_table" in
+        let _ = Node.append_child main div in
+        div
+
 end
 
 module Graph = struct
@@ -584,7 +594,7 @@ module TreeView = struct
       | Sampler -> rgb 0 200 125
     in
     let previous_info = ref None in
-    let render (parent : Graph.node option) container ({Graph.name; time = node_time; kind; calls; distrib; allocated_bytes; sys_time; location; id; _} as node) =
+    let render (parent : Graph.node option) _container ({Graph.name; time = node_time; kind; calls; distrib; allocated_bytes; sys_time; location; id; _} as node) =
       let loc_time = Graph.get_local_metric graph (fun {time; _} -> time) id in
       let node_value = proj node in
       let span = create "span" ~class_name:"content" ~text:name ~style:(Printf.sprintf "color:%s" (color node)) in
@@ -612,10 +622,9 @@ module TreeView = struct
                     ]
                   else []))
           in
-          let div = create "div" ~class_name:"fixed" in
-          Node.append_child div table;
-          Node.append_child container div;
-          previous_info := Some (fun () -> Node.remove_child container div));
+          let div = Helper.get_fixed_table () in
+          Helper.removeAll div;
+          Node.append_child div table);
       ( match parent, kind with
         | Some parent, Graph.Normal ->
           let parent_value = proj parent in
