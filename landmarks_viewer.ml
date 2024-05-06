@@ -813,6 +813,17 @@ end
 
 module CallerView = struct
 
+  (** [make_tab tabs main (present, title, fill)] return a tab where the *)
+  let make_tab tabs main (present, title, fill) =
+    if not present then [] else begin
+      let div = Helper.create "div" in
+      let title = Helper.create ~text:title "li" in
+      Node.append_child tabs title;
+      Node.append_child main div;
+      let action = Lazy.from_fun (fun _ -> fill div) in
+      [title, (div, action)]
+    end
+
   let selector graph tab create proj element =
     let inv = create graph in
     let names = Graph.get_all_name graph in
@@ -830,28 +841,31 @@ module CallerView = struct
         Node.append_child inlist option)
       names in
     let button = Helper.create ~text:"GO" ~class_name:"inter_button" "button" in
-    let div_svg = Helper.create "div" in
-    let _ = Element.set_attribute div_svg "class" "chart" in
-    let div = Helper.create "div" in
-    let _ = Element.set_attribute div "class" "tree" in
+    let div_view = Helper.create "div" in
+    let _ = Node.append_child element input in
+    let _ = Node.append_child element inlist in
+    let _ = Node.append_child element button in
+    let _ = Node.append_child element div_view in
+    let view_graph g =
+      let tabs_title = Helper.create "ul" ~class_name:"tabs" in
+      let _ = Node.append_child div_view tabs_title in
+      let tabs: (bool * string * ('a Node.t -> unit)) list = [
+        true, "Graph View", (fun div -> Element.set_attribute div "class" "tree"; TreeView.callgraph div g proj);
+        true, "Bar View", Chart.print_svg g proj;
+      ] in
+      let l = List.map (make_tab tabs_title div_view) tabs in
+      let l = List.flatten l in
+      Helper.tabs_logic l in
     let onclick () =
       let funname = Helper.input_of_id input_name in
       let fn = Html.Input.value funname in
       let g = inv fn in
-      let _ = Helper.removeAll div_svg in
-      let _ = Chart.print_svg g proj div_svg in
-      let _ = Helper.removeAll div in
-      TreeView.callgraph div g proj in
+      let _ = Helper.removeAll div_view in
+      view_graph g in
     begin
       let g = inv "ROOT" in
       Element.set_onclick button onclick;
-      Node.append_child element input;
-      Node.append_child element inlist;
-      Node.append_child element button;
-      Node.append_child element div_svg;
-      Node.append_child element div;
-      TreeView.callgraph div g proj;
-      Chart.print_svg g proj div_svg;
+      view_graph g;
     end
 end
 
@@ -874,20 +888,10 @@ let filename_onclick _ =
         let main = Helper.element_of_id "main" in
         Helper.removeAll main; print_endline "removed";
         Helper.show main;
-        let tabs = Helper.create "ul" ~class_name:"tabs" in
-        Node.append_child main tabs;
-        let tab (present, title, fill) =
-          if not present then [] else
-            let div = Helper.create "div" in
-            let title = Helper.create ~text:title "li" in
-            Node.append_child tabs title;
-            Node.append_child main div;
-            let action = Lazy.from_fun (fun _ -> fill div) in
-            [title, (div, action)]
-        in
+        let tabs_title = Helper.create "ul" ~class_name:"tabs" in
+        let _ = Node.append_child main tabs_title in
         let fill_graph tab proj =
-          CallerView.selector graph tab merge_graph proj;
-        in
+          CallerView.selector graph tab merge_graph proj in
         let tabs = [
           (* cycle tab *)
           true, "Source Tree Cycles", fill_graph "cycle" (fun {time; _} -> time);
@@ -903,8 +907,7 @@ let filename_onclick _ =
           true, "Caller graph",
           CallerView.selector graph "caller" inverse_graph (fun {time; _} -> time);
         ] in
-        let l = List.flatten (List.map tab tabs)
-        in
+        let l = List.flatten (List.map (CallerView.make_tab tabs_title main) tabs) in
         Helper.tabs_logic l
     in
     FileReader.read_as_text filereader file;
