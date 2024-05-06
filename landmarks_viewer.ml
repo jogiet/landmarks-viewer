@@ -335,7 +335,7 @@ module Graph = struct
         let acc = IntMap.add id node acc in
         id, acc in
       let ids = name_2_ids graph name in
-      if IntSet.is_empty ids then error ("Unknonw function "^name);
+      if IntSet.is_empty ids then error ("Unknonw function '"^name^"'");
       let root, map = treat_node ids IntMap.empty in
       let nodes = Array.init (IntMap.cardinal map) (fun i -> IntMap.find i map) in
       {nodes; root; label=""}
