@@ -101,6 +101,9 @@ module Element : sig
   val has_attribute: 'a t -> string -> bool
   val set_attribute: 'a t -> string -> string -> unit
   val get_attribute: 'a t -> string -> string
+  val has_attribute_n_s: 'a t -> string -> string -> bool
+  val set_attribute_n_s: 'a t -> string -> string -> string -> unit
+  val get_attribute_n_s: 'a t -> string -> string -> string
   val remove_attribute: 'a t -> string -> unit
 
   val set_class_name: 'a t -> string -> unit
@@ -126,6 +129,9 @@ end = struct
              val has_attribute: untyped -> string -> bool [@@js.call]
              val set_attribute: untyped -> string -> string -> unit [@@js.call]
              val get_attribute: untyped -> string -> string [@@js.call]
+             val has_attribute_n_s: untyped -> string -> string -> bool [@@js.call]
+             val set_attribute_n_s: untyped -> string -> string -> string -> unit [@@js.call]
+             val get_attribute_n_s: untyped -> string -> string -> string [@@js.call]
              val remove_attribute: untyped -> string -> unit [@@js.call]
 
              val set_class_name: untyped -> string -> unit [@@js.set]
@@ -158,9 +164,13 @@ module Document = struct
              val get_elements_by_class_name: t -> string -> unknown Element.t array [@@js.call]
 
              val create_element: t -> string -> unknown Element.t [@@js.call]
+             val create_element_n_s: t -> string -> string -> unknown Element.t [@@js.call]
              val create_text_node: t -> string -> Kinds.Node.text Node.t [@@js.call]
 
              val body: t -> Kinds.Html.body Element.t [@@js.get]
+
+             val height: t -> int [@@js.get]
+             val width: t -> int [@@js.get]
            ])
 
   let create_html_input document =
@@ -193,6 +203,8 @@ module Window = [%js :
   val t_to_js: t -> Ojs.t
 
   val document: t -> Document.t [@@js.get]
+  val inner_height: t -> int [@@js.get]
+  val inner_width: t -> int [@@js.get]
 
   val set_onload: t -> (unit -> unit) -> unit [@@js.set]
 ]

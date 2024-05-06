@@ -492,6 +492,148 @@ module Graph = struct
 
 end
 
+module Chart = struct
+  open Graph
+
+  let xlmns="http://www.w3.org/2000/svg"
+
+  let max_width = ref 1500 (** for a HD screen this is fine *)
+  let update svg =
+      let v =
+      GlobalVariables.window
+      |> Window.inner_width in
+    let _ = print_endline (Format.asprintf "new_val: %i" v) in
+    let _ = max_width := v - 700 in
+    let _ = Element.set_attribute_n_s svg "" "width" (Format.asprintf "%i" !max_width) in
+    ()
+  let max_depth = 15
+
+  let sep = 1.1
+  let row_height = 25.
+
+    let color graph proj node =
+      let intensity node = proj node /. (proj graph.nodes.(0))  in
+      let rgb = Printf.sprintf "rgb(%d,%d,%d)" in
+      let open Graph in
+      match node.kind with
+      | Normal -> begin
+          let i = intensity node in
+          (* Implements the bijection:
+           *  [0, 1] --> [0,1]
+           *               ______________
+           *    i   |--> \/ 1 - (i - 1)^2
+           *
+           *  to "amplify" the intensity (it is a quarter of a circle).
+           *)
+          let i = i -. 1.0 in
+          let i = i *. i in
+          let i = sqrt (1.0 -. i) |> ( *. ) 255.0 |> int_of_float in
+          rgb (i) 0 0
+        end
+      | Root -> rgb 125 125 125
+      | Counter -> rgb 0 125 200
+      | Sampler -> rgb 0 200 125
+
+  let hover (graph) (node: Graph.node) div () =
+    let _ = Helper.removeAll div in
+    let table =
+      let loc_time = Graph.get_local_metric graph (fun {time; _} -> time) node.id in
+      Helper.record_table
+        ( [ "Name", node.name;
+            "Tot Cycles", Printf.sprintf "%.0f" node.time |> Helper.format_number;
+            "Fun Cycles", Printf.sprintf "%.0f" loc_time |> Helper.format_number;
+            "Calls", Printf.sprintf "%d" node.calls |> Helper.format_number ]
+          @ (if node.location <> "" then ["Location", node.location] else [])
+          @ (if node.sys_time <> 0.0 then
+              let loc_sys_time = Graph.get_local_metric graph (fun {sys_time; _} -> sys_time) node.id in
+              [
+                ("Tot Time", Printf.sprintf "%.0f" node.sys_time |> Helper.format_number);
+                ("Fun Time", Printf.sprintf "%.0f" loc_sys_time |> Helper.format_number);
+              ]
+            else [])
+          @ (if node.allocated_bytes <> 0.0 then
+              let loc_allocated_bytes = Graph.get_local_metric graph (fun {allocated_bytes; _} -> allocated_bytes) node.id in
+              [
+                ("Tot Alloc bytes", Printf.sprintf "%.0f" node.allocated_bytes |> Helper.format_number);
+                ("Fun Alloc bytes", Printf.sprintf "%.0f" loc_allocated_bytes |> Helper.format_number);
+              ]
+            else [])) in
+    Node.append_child div table
+
+  (** [print_rect x y dx dy elem] dispalays asvg rectange in [elem].
+      @param x
+      @param y are the coordinates of the left-upper corner of the rectangle.
+      @param dx
+      @param dy are the size of the rectangle.  *)
+  let print_rect (x: float) (y:float) (dx: float) (dy: float) f_click f_hover elem color: unit =
+    let rect = Document.create_element_n_s document xlmns "rect" in
+    let _ = Element.set_attribute_n_s rect "" "x" (Format.asprintf "%.2f" x) in
+    let _ = Element.set_attribute_n_s rect "" "y" (Format.asprintf "%.2f" y) in
+    let _ = Element.set_attribute_n_s rect "" "width" (Format.asprintf "%.2f" (dx-.sep)) in
+    let _ = Element.set_attribute_n_s rect "" "height" (Format.asprintf "%.2f" dy) in
+    let _ = Element.set_attribute_n_s rect "" "fill" color in
+    let _ = Element.set_attribute_n_s rect "" "class" "bar" in
+    let _ = Element.set_onclick rect f_click in
+    let _ = Element.set_onmouseover rect f_hover in
+    Node.append_child elem rect
+
+  let cmp (g: Graph.graph)  proj i1 i2 =
+    let v1 = proj g.nodes.(i1) in
+    let v2 = proj g.nodes.(i2) in
+    compare v2 v1
+
+  let rec print_fun (graph: Graph.graph) left depth root proj fun_id div_table element =
+    let node = graph.nodes.(fun_id) in
+    let local = proj node in
+    let total = proj graph.nodes.(root) in
+    let ratio = local /. total in
+    let dx = ratio *. (float_of_int !max_width) in
+    if dx < 3.0 then left +. dx else
+    let y = (row_height +. 1.) *. (float_of_int depth) in
+    let dy = row_height in
+    let on_click () =
+      let _ = print_endline "click" in
+      let _ = Helper.removeAll element in
+      let _ = update element in
+      print_fun graph 0.0 0 fun_id proj fun_id div_table element |> ignore in
+    let hover = hover graph node div_table in
+    let color = color graph proj node in
+    let _ = print_rect left y dx dy on_click hover element color in
+    let r = if depth > max_depth then 0.0 else
+      node.children
+      |> List.sort (cmp graph proj)
+      |> List.fold_left
+      (fun left id -> print_fun graph left (depth+1) root proj id div_table element)
+      left  in
+    max r (left +. dx)
+
+
+  let print_svg (g: Graph.graph) proj elem =
+    let _ = print_endline "Starting print_svg" in
+    let div_table = Helper.get_fixed_table () in
+    let _ = Node.append_child elem div_table in
+    let svg = Document.create_element_n_s document xlmns "svg" in
+    let _ = update svg in
+    let _ = Element.set_attribute_n_s svg "" "width" (Format.asprintf "%i" !max_width) in
+    let total_height = (row_height +. 1.) *. float_of_int (max_depth + 1)
+      |> int_of_float in
+    let _ = Element.set_attribute_n_s svg "" "height" (Format.asprintf "%i" total_height) in
+    let _ = print_fun g 0. 0 0 proj 0 div_table svg |> ignore in
+    let button = Helper.create ~text:"goto root" ~class_name:"inter_button" "button" in
+    let goto_root () =
+      let _ = Helper.removeAll svg in
+      let _ = update svg in
+      print_fun g 0.0 0 0 proj 0 div_table svg |> ignore in
+    let _ = Element.set_onclick button goto_root in
+    let _ = Node.append_child elem div_table in
+    let _ = Node.append_child elem svg in
+    let _ = Node.append_child elem @@ Helper.create "br" in
+    let _ = Node.append_child elem button in
+    let _ = print_endline "Chart created" in
+    ()
+
+end
+
 module TreeView = struct
   open Helper
 
@@ -685,21 +827,28 @@ module CallerView = struct
         Node.append_child inlist option)
       names in
     let button = Helper.create ~text:"GO" ~class_name:"inter_button" "button" in
+    let div_svg = Helper.create "div" in
+    let _ = Element.set_attribute div_svg "class" "chart" in
     let div = Helper.create "div" in
     let _ = Element.set_attribute div "class" "tree" in
     let onclick () =
       let funname = Helper.input_of_id input_name in
       let fn = Html.Input.value funname in
       let g = inv fn in
+      let _ = Helper.removeAll div_svg in
+      let _ = Chart.print_svg g proj div_svg in
       let _ = Helper.removeAll div in
       TreeView.callgraph div g proj in
     begin
+      let g = inv "ROOT" in
       Element.set_onclick button onclick;
       Node.append_child element input;
       Node.append_child element inlist;
       Node.append_child element button;
+      Node.append_child element div_svg;
       Node.append_child element div;
-      TreeView.callgraph div (inv "ROOT") proj;
+      TreeView.callgraph div g proj;
+      Chart.print_svg g proj div_svg;
     end
 end
 
