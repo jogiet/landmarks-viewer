@@ -534,7 +534,10 @@ module Chart = struct
       | Counter -> rgb 0 125 200
       | Sampler -> rgb 0 200 125
 
-  let hover (graph) (node: Graph.node) div () =
+  let hover (graph) (node: Graph.node) svg () =
+    let div = Helper.get_fixed_table () in
+    let parent = Node.parent_node svg in
+    let _ = Node.append_child parent div in
     let _ = Helper.removeAll div in
     let table =
       let loc_time = Graph.get_local_metric graph (fun {time; _} -> time) node.id in
@@ -582,28 +585,28 @@ module Chart = struct
     let v2 = proj g.nodes.(i2) in
     compare v2 v1
 
-  let rec print_fun (graph: Graph.graph) left depth root proj fun_id div_table element =
+  let rec print_fun (graph: Graph.graph) left depth root proj fun_id element =
     let node = graph.nodes.(fun_id) in
     let local = proj node in
     let total = proj graph.nodes.(root) in
     let ratio = local /. total in
     let dx = ratio *. (float_of_int !max_width) in
     if dx < 3.0 then left +. dx else
-    let y = (row_height +. 1.) *. (float_of_int depth) in
+    let y = (row_height +. 1.) *. (float_of_int (max_depth - depth)) in
     let dy = row_height in
     let on_click () =
       let _ = print_endline "click" in
       let _ = Helper.removeAll element in
       let _ = update element in
-      print_fun graph 0.0 0 fun_id proj fun_id div_table element |> ignore in
-    let hover = hover graph node div_table in
+      print_fun graph 0.0 0 fun_id proj fun_id element |> ignore in
+    let hover = hover graph node element in
     let color = color graph proj node in
     let _ = print_rect left y dx dy on_click hover element color in
     let r = if depth > max_depth then 0.0 else
       node.children
       |> List.sort (cmp graph proj)
       |> List.fold_left
-      (fun left id -> print_fun graph left (depth+1) root proj id div_table element)
+      (fun left id -> print_fun graph left (depth+1) root proj id element)
       left  in
     max r (left +. dx)
 
@@ -618,12 +621,12 @@ module Chart = struct
     let total_height = (row_height +. 1.) *. float_of_int (max_depth + 1)
       |> int_of_float in
     let _ = Element.set_attribute_n_s svg "" "height" (Format.asprintf "%i" total_height) in
-    let _ = print_fun g 0. 0 0 proj 0 div_table svg |> ignore in
+    let _ = print_fun g 0. 0 0 proj 0 svg |> ignore in
     let button = Helper.create ~text:"goto root" ~class_name:"inter_button" "button" in
     let goto_root () =
       let _ = Helper.removeAll svg in
       let _ = update svg in
-      print_fun g 0.0 0 0 proj 0 div_table svg |> ignore in
+      print_fun g 0.0 0 0 proj 0 svg |> ignore in
     let _ = Element.set_onclick button goto_root in
     let _ = Node.append_child elem div_table in
     let _ = Node.append_child elem svg in

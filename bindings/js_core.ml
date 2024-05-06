@@ -38,6 +38,7 @@ module Node : sig
   (** Node API *)
 
   val append_child: 'a t -> 'b t -> unit
+  val parent_node: 'a t -> 'a t
   val base_URI: 'a t -> string
   val clone_node: 'a t -> 'a t
   val first_child: 'a t -> unknown t option
@@ -65,6 +66,7 @@ end = struct
              val untyped_to_js: untyped -> Ojs.t
 
              val append_child: untyped -> untyped -> unit [@@js.call]
+             val parent_node: untyped -> untyped [@@js.get]
              val base_URI: untyped -> string [@@js.get]
              val clone_node: untyped -> untyped [@@js.get]
              val first_child: untyped -> untyped option [@@js.get]
