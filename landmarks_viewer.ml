@@ -1065,9 +1065,9 @@ module CallerView = struct
       let tabs_title = Helper.create "ul" ~class_name:"tabs" in
       let _ = Node.append_child div_view tabs_title in
       let tabs: (bool * string * ('a Node.t -> unit)) list = [
+        true, "Bar View", BarChart.print_svg g proj;
         true, "Pie View", PieChart.print_svg g proj;
         true, "Graph View", (fun div -> Element.set_attribute div "class" "tree"; TreeView.callgraph div g proj);
-        true, "Bar View", BarChart.print_svg g proj;
       ] in
       let l = List.map (make_tab tabs_title div_view) tabs in
       let l = List.flatten l in
