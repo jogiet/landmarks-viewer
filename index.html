@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Landmarks viewer</title>
+<script src="landmarks_viewer.js"></script>
+<style>
+
+body {
+  font-family: Menlo, Consolas, monospace;
+}
+
+input[type=file] {
+    width: 80%;
+    padding: 12px 20px;
+    margin: 8px 0;
+    display: inline-block;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+input[type=button] {
+    width: 10%;
+    background-color: #4CAF50;
+    color: white;
+    padding: 14px 20px;
+    margin: 8px 0;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+input {
+  width: 30%;
+}
+
+input[type=button]:hover {
+    background-color: #45a049;
+}
+
+form {
+    width: 100%;
+    border-radius: 5px;
+    background-color: #f2f2f2;
+    padding: 10px;
+}
+
+.collapsible {
+   cursor: pointer;
+}
+
+.collapseButton {
+  font-weight: bold;
+  margin-left: 0.5em;
+}
+
+/* ul {
+  padding-left: 1em;
+  line-height: 1.5em;
+  list-style-type: square;
+} */
+
+table {
+  /* width: 80%; */
+  border-collapse: collapse;
+}
+
+td {
+  text-align:right;
+  border-bottom: 1px solid #aaa;
+  padding-left: 10pt;
+  padding-right: 10pt;
+}
+
+tr:nth-child(even) {
+    background-color: #ccc;
+}
+
+th {
+  cursor: pointer;
+  padding-left: 10pt;
+  padding-right: 10pt;
+}
+
+.vertical th {
+  cursor: default;
+  border-bottom: 1px solid #aaa;
+  text-align: left;
+}
+
+.fixed {
+  position: fixed;
+  top: 10em;
+  right: 1em;
+  width: 550px;
+  border: 2px solid #4285F4;
+  border-radius: 2px;
+}
+
+.fixed table {
+  width: 100%;
+}
+
+ul.tabs li {
+  display: inline-block;
+  margin-left: 1em;
+  padding-bottom: 0.5em;
+  cursor: pointer;
+}
+
+ul.tabs li.active {
+  border-bottom: 3px solid #4285F4;
+  color: #4285F4;
+}
+
+ul.tabs{
+  border-bottom: 1px solid #ddd;
+}
+
+.tree {
+  --spacing : 1.5rem;
+  --radius  : 1px;
+}
+
+.tree li{
+  display      : block;
+  position     : relative;
+  padding-left : calc(2 * var(--spacing) - var(--radius) - 2px);
+}
+
+.tree ul{
+  line-height: 1.5em;
+  margin-left  : calc(var(--radius) - var(--spacing));
+  padding-left : 0;
+}
+
+.tree ul li{
+  border-left : 2px solid #999;
+}
+
+.tree ul li:last-child {
+  border-color: transparent;
+}
+
+.tree ul li::before{
+  content      : '';
+  display      : block;
+  position     : absolute;
+  top          : calc(var(--spacing) / -2);
+  left         : -2px;
+  width        : calc(var(--spacing) + 2px);
+  height       : calc(var(--spacing) + 1px);
+  border       : solid #999;
+  border-width : 0 0 2px 2px;
+}
+
+button.inter_button {
+  font-size: large;
+	transition-duration: 0.5s;
+  background-color: #d1eaff;
+  border: solid 2px #457fa0;
+  border-radius: 4px;
+  padding: 5px;
+}
+button.inter_button:hover {
+  border: 2px solid #90BDFF;
+	color: #90BDFF;
+  background-color: #EEEEEE;
+}
+
+#main {
+  margin-left: 40px;
+  margin-right: 40px;
+}
+
+.bar {
+  opacity: 0.7;
+}
+.bar:hover {
+  fill: #d1ffd3;
+  opacity: 1;
+  stroke: #0400ff;
+  stroke-width: 1.5px;
+}
+
+</style>
+</head>
+<body>
+  <form id="filenameForm">
+    <label for="filename"> Callgraph:</label>
+    <input type="file" id="filename">
+    <input type="button" id="filenameButton" value="Load">
+  </form>
+  <div id="main">
+    <!-- HERE GOES THE RESULTS -->
+  </div>
+</body>
+</html>
