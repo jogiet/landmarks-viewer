@@ -506,10 +506,21 @@ module BarChart = struct
     let _ = max_width := v - 700 in
     let _ = Element.set_attribute_n_s svg "" "width" (Format.asprintf "%i" !max_width) in
     ()
-  let max_depth = 15
+  let max_depth = 30
 
   let sep = 1.1
-  let row_height = 25.
+  let row_height = 30.
+
+  let depth_size depth =
+    let ratio = 0.95 in
+    let rec aux acc last depth =
+      if depth = 0 then
+        acc
+      else
+        aux (acc +. last) (last *. ratio) (depth-1) in
+    aux row_height (row_height *. ratio) depth
+
+    let total_height = depth_size (max_depth +1)
 
     let color graph proj node =
       let intensity node = proj node /. (proj graph.nodes.(0))  in
@@ -592,8 +603,9 @@ module BarChart = struct
     let ratio = local /. total in
     let dx = ratio *. (float_of_int !max_width) in
     if dx < 3.0 then left +. dx else
-    let y = (row_height +. 1.) *. (float_of_int (max_depth - depth)) in
-    let dy = row_height in
+    let y = depth_size depth in
+    let dy = (depth_size (depth +1)) -. y -. sep in
+    let y = total_height -. (depth_size depth) in
     let on_click () =
       let _ = print_endline "click" in
       let _ = Helper.removeAll element in
@@ -618,7 +630,7 @@ module BarChart = struct
     let svg = Document.create_element_n_s document xlmns "svg" in
     let _ = update svg in
     let _ = Element.set_attribute_n_s svg "" "width" (Format.asprintf "%i" !max_width) in
-    let total_height = (row_height +. 1.) *. float_of_int (max_depth + 1)
+    let total_height = depth_size (max_depth +1)
       |> int_of_float in
     let _ = Element.set_attribute_n_s svg "" "height" (Format.asprintf "%i" total_height) in
     let _ = print_fun g 0. 0 0 proj 0 svg |> ignore in
@@ -642,7 +654,7 @@ module PieChart = struct
 
   let xlmns="http://www.w3.org/2000/svg"
 
-  let max_size = ref 600 (** for a HD screen this is fine *)
+  let max_size = ref 1000 (** for a HD screen this is fine *)
   let update svg =
     let _width = Window.inner_width GlobalVariables.window in
     let _height = Window.inner_width GlobalVariables.window in
@@ -653,14 +665,13 @@ module PieChart = struct
     ()
 
 
-  let max_depth = 100
+  let max_depth = 20
 
   let lim = 2. *. Float.pi /. 400.
   let pie_height = 35.
 
   let radius depth =
-    if true then pie_height *. (float_of_int depth) else
-    let ratio = 0.9 in
+    let ratio = 0.95 in
     let rec aux acc r depth =
       if depth = 0 then acc
       else aux (acc +. r) (r *. ratio) (depth -1) in
