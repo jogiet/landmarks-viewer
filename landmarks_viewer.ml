@@ -727,12 +727,12 @@ module PieChart = struct
     | Arc of float * float * float * bool * bool * point
   type svg_path = svg_path_elem list
 
-  let pp_point fmt p = Format.fprintf fmt "%4.2f %4.2f"p.x p.y
+  let pp_point fmt p = Format.fprintf fmt "%4.4f %4.4f"p.x p.y
   let pp_elem fmt = function
     | Move p -> Format.fprintf fmt "M %a" pp_point p
     | Line p -> Format.fprintf fmt "L %a" pp_point p
     | Arc (rx, ry, rot_x, l_flag, s_flag, p) ->
-      Format.fprintf fmt "A %.0f %.0f %.0f %i %i %a" rx ry rot_x
+      Format.fprintf fmt "A %.4f %.4f %.4f %i %i %a" rx ry rot_x
         (if l_flag then 1 else 0)
         (if s_flag then 1 else 0)
         pp_point p
