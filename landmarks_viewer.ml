@@ -764,6 +764,9 @@ module PieChart = struct
     let _ = Element.set_onmouseover circle f_hover in
     Node.append_child elem circle
 
+  let rotate t =
+    Float.pi /. 2. -. t
+
   (** [print_pie depth theta phi f_click c_hover elem color]
       displays a pie part starting at angle [theta] and spanning in angle [phi].
       [depth] is  *)
@@ -772,8 +775,8 @@ module PieChart = struct
     let r1 = radius depth in
     let r2 = (radius (depth + 1)) -. 2.0 in
     let lim = lim *. 25. /. r1 in
-    let ta = theta +. lim in
-    let tb = theta +. phi -. lim in
+    let ta = theta +. lim |> rotate in
+    let tb = theta +. phi -. lim |> rotate in
     let a1 = {x = r1 *. cos(ta); y = r1 *. sin(ta)} |> trans in
     let a2 = {x = r2 *. cos(ta); y = r2 *. sin(ta)} |> trans in
     let b1 = {x = r1 *. cos(tb); y = r1 *. sin(tb)} |> trans in
@@ -781,9 +784,9 @@ module PieChart = struct
     let p =
       [
         Move b1;
-        Arc (r1, r1, 0., phi > Float.pi, true, a1);
+        Arc (r1, r1, 0., phi > Float.pi, false, a1);
         Line a2;
-        Arc (r2, r2, 0., phi > Float.pi, false, b2);
+        Arc (r2, r2, 0., phi > Float.pi, true, b2);
         Line b1;
       ] in
     let d = Format.asprintf "%a" pp_path p in
